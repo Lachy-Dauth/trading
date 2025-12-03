@@ -1,0 +1,22 @@
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+
+# Virtual Environment
+.venv/
+venv/
+env/
+
+# OS Files
+.DS_Store
+.vscode/
+
+# Project Data (Sensitive/Personal)
+trades.txt
+transfers.txt
+cgt_cache.json
+
+# Generated Reports and Outputs
+cgt_report.md
+portfolio_performance.png
