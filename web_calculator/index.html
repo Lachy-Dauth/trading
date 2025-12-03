@@ -1,0 +1,103 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>CGT Calculator</title>
+    <link rel="stylesheet" href="style.css">
+</head>
+<body>
+    <div class="container">
+        <div class="header-row">
+            <h1>Capital Gains Tax Calculator</h1>
+            <button id="helpBtn" class="icon-btn" aria-label="Help">?</button>
+        </div>
+        
+        <div class="controls">
+            <div class="input-group">
+                <h3>1. Trades</h3>
+                <div class="tabs">
+                    <button class="tab-btn active" data-target="trades-file">Upload File</button>
+                    <button class="tab-btn" data-target="trades-text">Paste Text</button>
+                </div>
+                <div id="trades-file" class="tab-content active">
+                    <label for="tradesFile">Select trades.txt:</label>
+                    <input type="file" id="tradesFile" accept=".txt">
+                </div>
+                <div id="trades-text" class="tab-content">
+                    <label for="tradesText">Paste content from Stake Aus (Trades):</label>
+                    <textarea id="tradesText" placeholder="Paste your trade history here..."></textarea>
+                </div>
+            </div>
+            
+            <div class="input-group">
+                <h3>2. Transfers (Optional)</h3>
+                <div class="tabs">
+                    <button class="tab-btn active" data-target="transfers-file">Upload File</button>
+                    <button class="tab-btn" data-target="transfers-text">Paste Text</button>
+                </div>
+                <div id="transfers-file" class="tab-content active">
+                    <label for="transfersFile">Select transfers.txt:</label>
+                    <input type="file" id="transfersFile" accept=".txt">
+                </div>
+                <div id="transfers-text" class="tab-content">
+                    <label for="transfersText">Paste content from Stake Aus (Transfers):</label>
+                    <textarea id="transfersText" placeholder="Paste your transfer/dividend history here..."></textarea>
+                </div>
+            </div>
+
+            <div class="options">
+                <label>
+                    <input type="checkbox" id="advancedMode"> Advanced Mode (Cost Base Adjustments)
+                </label>
+            </div>
+
+            <button id="calculateBtn">Calculate CGT</button>
+        </div>
+
+        <div id="output" class="output-area">
+            <p class="placeholder">Upload files and click Calculate to see the report.</p>
+        </div>
+
+        <footer class="disclaimer">
+            <p><strong>Disclaimer:</strong> This tool is for educational purposes only. It does not constitute tax advice. It may not be correct or up to date. I am a uni student doing this for fun and to gain a better understanding of tax calculations.</p>
+        </footer>
+    </div>
+
+    <!-- Modals -->
+    <div id="dividendModal" class="modal">
+        <div class="modal-content">
+            <h2>Cost Base Adjustments</h2>
+            <p>Enter the tax-deferred (AMIT) adjustment percentage for each dividend found.</p>
+            <p class="hint">Positive % = Decrease Cost Base (Tax Deferred)<br>Negative % = Increase Cost Base (AMIT Shortfall)</p>
+            <div id="dividendList" class="dividend-list"></div>
+            <div class="modal-actions">
+                <button id="submitDividends">Confirm & Calculate</button>
+            </div>
+        </div>
+    </div>
+
+    <div id="helpModal" class="modal">
+        <div class="modal-content">
+            <span class="close-help">&times;</span>
+            <h2>About This Tool</h2>
+            <p>This calculator helps Australian investors estimate Capital Gains Tax (CGT) obligations.</p>
+            <h3>Features:</h3>
+            <ul>
+                <li><strong>Tax Minimization:</strong> Automatically selects shares to sell to minimize tax (Losses first, then Long Term Gains, then Short Term Gains).</li>
+                <li><strong>Advanced Mode:</strong> Allows for AMIT cost base adjustments from dividend statements.</li>
+            </ul>
+            <h3>Input Files:</h3>
+            <ul>
+                <li><strong>trades.txt:</strong> A copy and paste of your trade history from Stake Aus.</li>
+                <li><strong>transfers.txt:</strong> A copy and paste of your transfer history from Stake Aus.</li>
+            </ul>
+            <h3>Copy & Paste (Stake Aus):</h3>
+            <p>You can copy and paste directly from the Stake Aus website/app history. The tool will attempt to parse the format automatically (even if not tab-separated).</p>
+        </div>
+    </div>
+
+    <!-- Note: This requires compilation from app.ts to app.js -->
+    <script src="app.js"></script>
+</body>
+</html>
