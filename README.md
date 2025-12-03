@@ -1,7 +1,6 @@
 # Trading Analysis & CGT Calculator
 
-A suite of Python tools designed for Australian (ASX) investors to analyze portfolio performance and calculate Capital Gains Tax (CGT) obligations with advanced tax minimization strategies.
-
+A suite of Python tools designed for Australian (ASX) investors to analyze portfolio performance and calculate Capital Gains Tax (CGT) obligations with advanced tax minimization strategies. A web-based version of the CGT calculator can be found [here](https://lachy-dauth.github.io/trading/web_calculator/). 
 ## Features
 
 ### 1. Performance Analysis (`analyze_trades.py`)
@@ -55,26 +54,26 @@ python cgt_calculator.py --advanced
 ```
 *You will be prompted to enter adjustment percentages for dividends found in `transfers.txt`. Enter positive values for decreases (tax deferred) and negative values for increases (shortfall).*
 
+### Web Calculator
+For a graphical interface with drag-and-drop and copy-paste support:
+1. Open [This](https://lachy-dauth.github.io/trading/web_calculator/) in your web browser.
+2. Use the tabs to either upload files or paste data directly.
+
 ## Input File Formats
 
-The tools expect two tab-separated text files in the working directory.
+Directly copy transaction history from the Stake Aus dashboard.
 
-### `trades.txt`
-Contains trade history.
-**Format:** `Date` | `Ticker` | `Action` | `Quantity` | `Price` | `Amount`
-```text
-2025-12-03	WTC.AX	Buy	100	70.30	-7033.00
-2025-12-03	WTC.AX	Sell	100	70.80	7077.00
-```
-*Note: The script handles reverse chronological order (newest first) automatically.*
+**Trades Input:**
+Copy from the "Trades" section. The parser expects blocks of 3 lines per trade:
+1. `Date` `Ticker` (e.g., `2025-12-03 WTC`)
+2. `Action` (e.g., `Buy` or `Sell`)
+3. `Details` (e.g., `100 shares @ $70.30`)
 
-### `transfers.txt`
-Contains cash movements and dividends.
-**Format:** `Date` | `Description` | `Amount` | `Category`
-```text
-2025-07-16	GHHF Dividend	150.00	Dividend
-2025-07-01	Deposit	5000.00	Transfer
-```
+**Transfers Input:**
+Copy from "Funds & Balances" > "Transactions". The parser expects blocks of 3 lines per transfer:
+1. `Date` `Description` (e.g., `2 Dec 2025 Accumulate distribution`)
+2. `Status` (e.g., `Complete`)
+3. `Amount` (e.g., `+A$19.72`)
 
 ## Output
 
