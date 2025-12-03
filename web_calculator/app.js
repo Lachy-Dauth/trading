@@ -500,24 +500,27 @@ calculateBtn.addEventListener('click', async () => {
 function promptForDividends(dividends) {
     return new Promise((resolve) => {
         dividendListDiv.innerHTML = '';
-        const inputs = [];
+        
+        // Load saved adjustments from localStorage
+        const savedJson = localStorage.getItem('cgt_dividend_adjustments');
+        const savedAdjustments = savedJson ? JSON.parse(savedJson) : {};
 
         dividends.forEach((div, index) => {
             const divItem = document.createElement('div');
             divItem.className = 'div-item';
             
-            // Generate a unique key for this dividend
-            // Note: In real app, might need ID. Here using Date+Ticker+Amount
-            // We need to extract ticker again for the key
-            // Simple extraction for display
             const dateStr = div.date.toISOString().split('T')[0];
             
+            // Generate key to lookup saved value
+            const key = `${div.date.toISOString()}_${div.amount}_${div.description}`;
+            const savedVal = savedAdjustments[key] || 0;
+
             divItem.innerHTML = `
                 <div class="div-info">
                     <strong>${dateStr}</strong> - ${div.description}<br>
                     Amount: $${div.amount.toFixed(2)}
                 </div>
-                <input type="number" step="0.01" value="0" class="div-input" data-index="${index}">
+                <input type="number" step="0.01" value="${savedVal}" class="div-input" data-index="${index}">
                 <span>%</span>
             `;
             dividendListDiv.appendChild(divItem);
@@ -526,69 +529,34 @@ function promptForDividends(dividends) {
         dividendModal.style.display = "block";
 
         // Handle Submit
-        // Remove old listener to avoid duplicates if run multiple times?
-        // Better: clone node or use 'once' option, but we need to pass data.
-        // Let's just assign onclick.
         submitDividendsBtn.onclick = () => {
-            const adjustments = {};
+            // Reload to ensure we have latest state (though unlikely to change in between)
+            const currentSavedJson = localStorage.getItem('cgt_dividend_adjustments');
+            const currentSavedAdjustments = currentSavedJson ? JSON.parse(currentSavedJson) : {};
+
+            const result = {};
             const inputElements = dividendListDiv.querySelectorAll('.div-input');
             
             inputElements.forEach(input => {
                 const index = parseInt(input.getAttribute('data-index'));
                 const val = parseFloat(input.value);
+                const div = dividends[index];
+                const key = `${div.date.toISOString()}_${div.amount}_${div.description}`;
+
                 if (val !== 0 && !isNaN(val)) {
-                    const div = dividends[index];
-                    // Re-derive ticker for key (same logic as in calculateCGT)
-                    // This is a bit redundant but ensures key match
-                    // We can just store the key on the element?
-                    // Let's just iterate tickers again.
-                    // Actually, calculateCGT does the matching. We need to match that logic.
-                    // Let's pass the raw list index? No, calculateCGT iterates events.
-                    
-                    // We need to generate the SAME key as calculateCGT will.
-                    // calculateCGT iterates holdings keys.
-                    // Here we don't have holdings yet.
-                    // But we know the description contains the ticker.
-                    // Let's extract the ticker from description based on known tickers?
-                    // We don't have the list of known tickers easily here without re-parsing.
-                    
-                    // Alternative: calculateCGT logic finds ticker by checking holdings keys.
-                    // Here we can just use the description as part of the key?
-                    // No, calculateCGT uses `tickerMatch`.
-                    
-                    // Let's try to extract the ticker here properly.
-                    // We can pass the tickers set to this function?
-                    // Or just use a simpler key: "Date_Amount_Description" ?
-                    // But calculateCGT needs to look it up.
-                    
-                    // Let's update calculateCGT to look up by a key that doesn't depend on Ticker?
-                    // No, Ticker is good.
-                    
-                    // Let's just extract the ticker here. We know it's in the description.
-                    // We can assume the ticker is the word that matches a known ticker.
-                    // But we don't have the known tickers list here easily unless passed.
-                    
-                    // Let's pass tickers to promptForDividends?
-                    // Actually, let's just use the Date and Amount and Description as key.
-                    // Update calculateCGT to use that key.
-                }
-            });
-            
-            // Wait, I need to fix the key generation.
-            // Let's update calculateCGT to use a key based on the dividend object itself (Date + Amount + Description).
-            // That is robust.
-            
-            const result = {};
-            inputElements.forEach(input => {
-                const index = parseInt(input.getAttribute('data-index'));
-                const val = parseFloat(input.value);
-                if (val !== 0 && !isNaN(val)) {
-                    const div = dividends[index];
-                    // Key: Date_Amount_Description
-                    const key = `${div.date.toISOString()}_${div.amount}_${div.description}`;
                     result[key] = val;
+                    currentSavedAdjustments[key] = val; // Save to storage
+                } else {
+                    // If 0, remove from storage so it doesn't persist as 0 unnecessarily
+                    // (or keep it if we want to remember "0" explicitly? Default is 0 anyway)
+                    if (currentSavedAdjustments[key]) {
+                        delete currentSavedAdjustments[key];
+                    }
                 }
             });
+
+            // Persist back to localStorage
+            localStorage.setItem('cgt_dividend_adjustments', JSON.stringify(currentSavedAdjustments));
 
             dividendModal.style.display = "none";
             resolve(result);
