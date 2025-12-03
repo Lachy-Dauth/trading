@@ -3,6 +3,7 @@ import json
 import os
 import re
 import argparse
+import copy
 from datetime import datetime, timedelta
 
 # --- Parsing Functions (Copied from analyze_trades.py) ---
@@ -141,6 +142,7 @@ def calculate_cgt(trades_df, transfers_df=None, advanced_mode=False):
     holdings = {} # Ticker -> List of Lots
     realized_gains = []
     adjustments = []
+    holdings_snapshots = {} # (fy_start, fy_end) -> holdings_copy
     
     cache = load_cache()
     
@@ -166,8 +168,26 @@ def calculate_cgt(trades_df, transfers_df=None, advanced_mode=False):
     # Sort events by date
     events.sort(key=lambda x: x['Date'])
     
+    # Determine the first FY
+    current_fy_end = None
+    if events:
+        first_date = events[0]['Date']
+        if first_date.month >= 7:
+            current_fy_end = datetime(first_date.year + 1, 6, 30)
+        else:
+            current_fy_end = datetime(first_date.year, 6, 30)
+    
     for event in events:
         date = event['Date']
+        
+        # Check if we crossed a FY boundary
+        while current_fy_end and date > current_fy_end:
+            # Save snapshot for the FY that just ended
+            fy_start = datetime(current_fy_end.year - 1, 7, 1)
+            holdings_snapshots[(fy_start, current_fy_end)] = copy.deepcopy(holdings)
+            
+            # Move to next FY
+            current_fy_end = datetime(current_fy_end.year + 1, 6, 30)
         
         if event['Type'] == 'Trade':
             trade = event['Data']
@@ -369,12 +389,18 @@ def calculate_cgt(trades_df, transfers_df=None, advanced_mode=False):
                                 # Let's just print warning.
                                 pass
 
-    return realized_gains, holdings, adjustments
+    # Capture the final state for the current/last FY
+    if current_fy_end:
+        fy_start = datetime(current_fy_end.year - 1, 7, 1)
+        holdings_snapshots[(fy_start, current_fy_end)] = copy.deepcopy(holdings)
+
+    return realized_gains, holdings, adjustments, holdings_snapshots
 
 def generate_report(realized_gains, holdings, adjustments, fy_start, fy_end, filename='cgt_report.md'):
     
     # Filter for current FY
     fy_gains = [g for g in realized_gains if fy_start <= g['Date'] <= fy_end]
+    fy_adjustments = [a for a in adjustments if fy_start <= a['Date'] <= fy_end]
     
     total_gain = 0.0
     total_discounted_gain = 0.0
@@ -453,11 +479,11 @@ def generate_report(realized_gains, holdings, adjustments, fy_start, fy_end, fil
             for lot in sorted_lots:
                 f.write(f"| {ticker} | {lot.date.strftime('%Y-%m-%d')} | {lot.quantity} | ${lot.cost_base:.2f} | ${lot.unit_cost_base:.2f} |\n")
 
-        if adjustments:
+        if fy_adjustments:
             f.write("\n## Cost Base Adjustments\n")
             f.write("| Date | Ticker | Description | Type | Total Amount | Per Share |\n")
             f.write("|---|---|---|---|---|---|\n")
-            for adj in adjustments:
+            for adj in fy_adjustments:
                 f.write(f"| {adj['Date'].strftime('%Y-%m-%d')} | {adj['Ticker']} | {adj['Description']} | {adj['Type']} | ${abs(adj['TotalAmount']):.2f} | ${abs(adj['PerShare']):.4f} |\n")
 
 
@@ -478,21 +504,24 @@ def main():
         transfers_df = parse_transfers(transfers_file)
         
     print("Calculating CGT...")
-    realized_gains, holdings, adjustments = calculate_cgt(trades_df, transfers_df, args.advanced)
+    realized_gains, holdings, adjustments, holdings_snapshots = calculate_cgt(trades_df, transfers_df, args.advanced)
     
-    # Determine FY
-    # Default to current date's FY
-    now = datetime.now()
-    if now.month >= 7:
-        fy_start = datetime(now.year, 7, 1)
-        fy_end = datetime(now.year + 1, 6, 30)
-    else:
-        fy_start = datetime(now.year - 1, 7, 1)
-        fy_end = datetime(now.year, 6, 30)
+    # Create reports directory
+    reports_dir = 'reports'
+    if not os.path.exists(reports_dir):
+        os.makedirs(reports_dir)
         
-    print(f"Generating report for FY {fy_start.year}-{fy_end.year}...")
-    generate_report(realized_gains, holdings, adjustments, fy_start, fy_end)
-    print("Report saved to cgt_report.md")
+    # Generate report for each FY found in snapshots
+    if not holdings_snapshots:
+        print("No data found to generate reports.")
+        return
+
+    for (fy_start, fy_end), fy_holdings in sorted(holdings_snapshots.items(), key=lambda x: x[0][0]):
+        report_filename = os.path.join(reports_dir, f'cgt_report_{fy_end.year}.md')
+        print(f"Generating report for FY {fy_start.year}-{fy_end.year} -> {report_filename}...")
+        generate_report(realized_gains, fy_holdings, adjustments, fy_start, fy_end, filename=report_filename)
+        
+    print("All reports generated.")
 
 if __name__ == "__main__":
     main()
