@@ -665,7 +665,7 @@ def calculate_metrics(portfolio_df, transfers_df, rf_price_series, rf_dividend_s
 def main():
     parser = argparse.ArgumentParser(description='Analyze trading portfolio with tax adjustments.')
     parser.add_argument('--tax-rate', type=float, required=True, 
-                        help='Tax rate as a decimal (e.g., 0.37 for 37%)')
+                        help='Tax rate as a decimal (e.g., 0.37 for 37%%)')
     parser.add_argument('--benchmark', type=str, 
                         help='Ticker for benchmark ETF (e.g., GHHF.AX)')
     args = parser.parse_args()
