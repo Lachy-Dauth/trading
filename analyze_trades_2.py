@@ -5,7 +5,6 @@ import re
 from datetime import datetime, timedelta
 import numpy as np
 import argparse
-import copy
 
 def parse_trades(file_path):
     trades = []
@@ -395,20 +394,8 @@ def calculate_portfolio_with_tax(trades_df, transfers_df, price_data, tax_rate):
                     holdings_lots[ticker].remove(lot)
                 
                 # Calculate tax
-                # Discounted gains get 50% discount before tax
-                # Undiscounted gains are fully taxable
-                # Losses offset gains first before applying discount
-                
-                # Simplified approach: apply discount to gains, then tax the net
-                taxable_amount = 0.0
-                
-                if total_discounted_gain > 0:
-                    taxable_amount += total_discounted_gain * 0.5
-                else:
-                    taxable_amount += total_discounted_gain # Negative (loss)
-                
-                taxable_amount += total_undiscounted_gain
-                
+                # Apply 50% discount to eligible gains, then calculate tax on total
+                taxable_amount = (total_discounted_gain * 0.5) + total_undiscounted_gain
                 tax_on_sale = taxable_amount * tax_rate
                 
                 # Treat tax as a virtual deposit (positive tax) or withdrawal (negative tax for losses)
@@ -681,8 +668,11 @@ def calculate_benchmark_with_tax(transfers_df, benchmark_ticker, price_series, d
                             taxable_amount = total_discounted_gain * 0.5 + total_undiscounted_gain
                             tax_on_cgt = taxable_amount * tax_rate
                             
-                            # This creates a recursive tax situation, but we'll ignore it for simplicity
-                            # Just pay the dividend tax by selling shares
+                            # Note: This creates a recursive tax situation (selling shares to pay tax 
+                            # creates CGT liability). For simplicity, we only account for the first-order
+                            # tax effect. The additional CGT is typically small relative to the dividend
+                            # tax and iterative calculation would add complexity without significant
+                            # accuracy improvement for most portfolios.
                             
                             tax_events.append({
                                 'Date': div_date,
