@@ -11,6 +11,19 @@ A suite of Python tools designed for Australian (ASX) investors to analyze portf
 - Benchmarks performance against an index/ETF (default: `GHHF.AX`).
 - Generates a performance comparison chart (`portfolio_performance.png`).
 
+### 1b. Performance Analysis with Tax Adjustments (`analyze_trades_2.py`)
+- Extended version of `analyze_trades.py` that incorporates tax implications:
+  - Takes tax rate as command line argument
+  - Tracks tax on dividends as deposits (offset future tax payments)
+  - Tracks tax on capital gains/losses (withdrawals for losses, taxes for gains)
+  - Shows final value if portfolio sold today (including unrealized tax liability)
+  - For benchmark, actually sells shares to pay taxes on dividend events
+- Uses same tax minimization logic as `cgt_calculator.py`:
+  1. Realize losses first to offset gains
+  2. Long-term gains (held > 12 months, 50% discount eligible) next
+  3. Short-term gains last
+- Generates a performance comparison chart (`portfolio_performance_with_tax.png`).
+
 ### 2. CGT Calculator (`cgt_calculator.py`)
 - **Tax Minimization Logic:** Automatically selects which share lots to sell to minimize tax liability:
   1.  Realized Losses (to offset gains)
@@ -39,6 +52,18 @@ A suite of Python tools designed for Australian (ASX) investors to analyze portf
 Run the analysis script to see how your trading strategy compares to the market.
 ```bash
 python analyze_trades.py
+```
+
+**With Tax Adjustments:**
+Run the enhanced analysis that accounts for tax implications:
+```bash
+python analyze_trades_2.py --tax-rate 0.37
+```
+*Replace `0.37` with your marginal tax rate (e.g., 0.32 for 32%, 0.45 for 45%).*
+
+**Compare to a benchmark with tax:**
+```bash
+python analyze_trades_2.py --tax-rate 0.37 --benchmark GHHF.AX
 ```
 
 ### CGT Calculation
