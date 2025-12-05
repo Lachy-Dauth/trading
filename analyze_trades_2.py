@@ -463,10 +463,10 @@ def calculate_benchmark_with_tax(transfers_df, benchmark_ticker, price_series, d
                         sale_proceeds = shares_to_sell * current_price
                         gain = sale_proceeds - total_cost_base
                         
-                        # Check if discount eligible (held > 12 months)
-                        # Simplified: assume average holding period
-                        if gain > 0:
-                            held_duration = div_date - (lots[0]['date'] if lots else div_date)
+                        # Apply CGT discount rules similar to portfolio calculation
+                        # For simplicity in benchmark, we'll assume FIFO and check first lot
+                        if gain > 0 and lots:
+                            held_duration = div_date - lots[0]['date']
                             discount_eligible = held_duration > timedelta(days=365)
                             
                             if discount_eligible:
@@ -476,6 +476,10 @@ def calculate_benchmark_with_tax(transfers_df, benchmark_ticker, price_series, d
                             
                             additional_tax = taxable_gain * tax_rate
                             tax_owed += additional_tax
+                        elif gain < 0:
+                            # Loss reduces tax owed
+                            loss_benefit = abs(gain) * tax_rate
+                            tax_owed = max(0, tax_owed - loss_benefit)
                         
                         shares_held.loc[div_date:] -= shares_to_sell
                         
