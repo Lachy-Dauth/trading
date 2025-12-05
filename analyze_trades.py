@@ -240,7 +240,7 @@ def calculate_benchmark(transfers_df, benchmark_ticker, price_series, dividend_s
         'Stock Value': (shares_held * price_filled)
     })
 
-def print_summary(portfolio, benchmark=None, benchmark_name=None, metrics=None):
+def print_summary(portfolio, benchmark=None, benchmark_name=None, metrics=None, no_return=None):
     print("\n" + "="*40)
     print("PERFORMANCE SUMMARY")
     print("="*40)
@@ -253,6 +253,17 @@ def print_summary(portfolio, benchmark=None, benchmark_name=None, metrics=None):
     print("-" * 40)
     print(f"{'Final Value':<20} | ${final_val:,.2f}")
     
+    if no_return is not None and not no_return.empty:
+        invested_val = no_return['Total Value'].iloc[-1]
+        print(f"{'Net Invested':<20} | ${invested_val:,.2f}")
+        
+        total_return_abs = final_val - invested_val
+        print(f"{'Total Return $':<20} | ${total_return_abs:,.2f}")
+        
+        if invested_val != 0:
+            total_return_pct = (total_return_abs / invested_val) * 100
+            print(f"{'Total Return %':<20} | {total_return_pct:.2f}%")
+
     if metrics:
         if metrics.get('Return') is not None:
             print(f"{'Ann. Return':<20} | {metrics['Return']*100:.2f}%")
@@ -262,6 +273,7 @@ def print_summary(portfolio, benchmark=None, benchmark_name=None, metrics=None):
             print(f"{'Sharpe Ratio':<20} | {metrics['Sharpe']:.2f}")
     
     if benchmark is not None and not benchmark.empty:
+        print("-" * 40)
         bench_final_val = benchmark['Total Value'].iloc[-1]
         print(f"{benchmark_name + ' Value':<20} | ${bench_final_val:,.2f}")
         
@@ -274,87 +286,6 @@ def print_summary(portfolio, benchmark=None, benchmark_name=None, metrics=None):
             
     print("="*40 + "\n")
 
-def main():
-    parser = argparse.ArgumentParser(description='Analyze trading portfolio.')
-    parser.add_argument('--benchmark', type=str, help='Ticker for benchmark ETF (e.g., GHHF.AX)')
-    args = parser.parse_args()
-
-    file_path = 'trades.txt'
-    transfers_path = 'transfers.txt'
-    
-    print("Parsing trades...")
-    trades_df = parse_trades(file_path)
-    
-    print("Parsing transfers...")
-    transfers_df = parse_transfers(transfers_path)
-    
-    tickers = list(trades_df['Ticker'].unique())
-    if args.benchmark and args.benchmark not in tickers:
-        tickers.append(args.benchmark)
-        
-    # Add AAA.AX for risk-free rate
-    rf_ticker = 'AAA.AX'
-    if rf_ticker not in tickers:
-        tickers.append(rf_ticker)
-        
-    start_date = min(trades_df['Date'].min(), transfers_df['Date'].min())
-    end_date = datetime.now() # Use current real time
-    
-    # If trades are in the future relative to now, we can't fetch data.
-    if start_date > end_date:
-        print(f"Warning: First activity date {start_date} is in the future relative to system time {end_date}.")
-        print("Cannot fetch historical data for future dates.")
-        return
-
-    print("Fetching market data...")
-    price_data, dividend_data = get_market_data(tickers, start_date, end_date)
-        
-    print("Calculating portfolio...")
-    portfolio = calculate_portfolio(trades_df, transfers_df, price_data)
-    
-    benchmark_portfolio = pd.DataFrame()
-    if args.benchmark:
-        print(f"Calculating benchmark ({args.benchmark})...")
-        if args.benchmark in price_data:
-            benchmark_portfolio = calculate_benchmark(
-                transfers_df, 
-                args.benchmark, 
-                price_data[args.benchmark], 
-                dividend_data.get(args.benchmark, pd.Series(dtype=float))
-            )
-            
-    # Calculate Sharpe Ratio
-    sharpe_ratio = None
-    if rf_ticker in price_data:
-        print(f"Calculating Sharpe Ratio using {rf_ticker}...")
-        sharpe_ratio = calculate_sharpe_ratio(
-            portfolio, 
-            transfers_df, 
-            price_data[rf_ticker], 
-            dividend_data.get(rf_ticker, pd.Series(dtype=float))
-        )
-    
-    print_summary(portfolio, benchmark_portfolio, args.benchmark, sharpe_ratio)
-    
-    if not portfolio.empty:
-        print("Plotting...")
-        plt.figure(figsize=(12, 6))
-        plt.plot(portfolio.index, portfolio['Total Value'], label='Total Portfolio Value')
-        # plt.plot(portfolio.index, portfolio['Cash'], label='Cash Position', linestyle='--')
-        # plt.plot(portfolio.index, portfolio['Stock Value'], label='Stock Holdings', linestyle=':')
-        
-        if not benchmark_portfolio.empty:
-            plt.plot(benchmark_portfolio.index, benchmark_portfolio['Total Value'], label=f'Benchmark ({args.benchmark})', linestyle='--')
-            
-        plt.title('Portfolio Performance Over Time')
-        plt.xlabel('Date')
-        plt.ylabel('Value (AUD)')
-        plt.legend()
-        plt.grid(True)
-        plt.savefig('portfolio_performance.png')
-        print("Graph saved to portfolio_performance.png")
-    else:
-        print("Portfolio is empty or could not be calculated.")
 
 def calculate_metrics(portfolio_df, transfers_df, rf_price_series, rf_dividend_series):
     metrics = {
@@ -425,6 +356,22 @@ def calculate_metrics(portfolio_df, transfers_df, rf_price_series, rf_dividend_s
                 
     return metrics
 
+def calculate_no_return(transfers_df, start_date, end_date):
+    all_dates = pd.date_range(start=start_date, end=end_date, freq='D')
+    cash_invested = pd.Series(0.0, index=all_dates)
+    
+    # Process Transfers (Deposits/Withdrawals only)
+    transfers_by_date = transfers_df[transfers_df['Category'] == 'Transfer'].groupby('Date')
+    
+    for date, day_transfers in transfers_by_date:
+        if date in all_dates:
+            net_transfer = day_transfers['Amount'].sum()
+            cash_invested.loc[date:] += net_transfer
+            
+    return pd.DataFrame({
+        'Total Value': cash_invested
+    })
+
 def main():
     parser = argparse.ArgumentParser(description='Analyze trading portfolio.')
     parser.add_argument('--benchmark', type=str, help='Ticker for benchmark ETF (e.g., GHHF.AX)')
@@ -493,7 +440,9 @@ def main():
         rf_divs
     )
     
-    print_summary(portfolio, benchmark_portfolio, args.benchmark, metrics)
+    no_return = calculate_no_return(transfers_df, start_date, end_date)
+    
+    print_summary(portfolio, benchmark_portfolio, args.benchmark, metrics, no_return)
     
     if not portfolio.empty:
         print("Plotting...")
@@ -502,6 +451,9 @@ def main():
         # plt.plot(portfolio.index, portfolio['Cash'], label='Cash Position', linestyle='--')
         # plt.plot(portfolio.index, portfolio['Stock Value'], label='Stock Holdings', linestyle=':')
         
+        if not no_return.empty:
+            plt.plot(no_return.index, no_return['Total Value'], label='Net Invested Capital (0% Return)', linestyle=':', color='gray')
+
         if not benchmark_portfolio.empty:
             plt.plot(benchmark_portfolio.index, benchmark_portfolio['Total Value'], label=f'Benchmark ({args.benchmark})', linestyle='--')
             
