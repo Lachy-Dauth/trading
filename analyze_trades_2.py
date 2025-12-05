@@ -927,16 +927,24 @@ def main():
     if not portfolio.empty:
         print("Plotting...")
         plt.figure(figsize=(12, 6))
-        plt.plot(portfolio.index, portfolio['Total Value'] - portfolio['Tax Adjustment'], 
-                label='Portfolio Value (After Tax)', linewidth=2)
         
+        # Plot portfolio BEFORE tax
+        plt.plot(portfolio.index, portfolio['Total Value'], 
+                label='Portfolio Value (Before Tax)', linewidth=2)
+        
+        # Plot net invested capital adjusted by adding capital when tax needs to be paid
         if not no_return.empty:
-            plt.plot(no_return.index, no_return['Total Value'] - no_return['Tax on Dividends'], 
-                    label='Net Invested Capital (0% Return, After Tax)', linestyle=':', color='gray')
+            # Add portfolio's tax liability to the no-return baseline
+            no_return_adjusted = no_return['Total Value'] + portfolio['Tax Adjustment']
+            plt.plot(no_return.index, no_return_adjusted, 
+                    label='Net Invested Capital (0% Return, Adjusted for Portfolio Tax)', linestyle=':', color='gray')
 
+        # Plot benchmark after tax but with additional capital injected to cover portfolio's tax
         if not benchmark_portfolio.empty:
-            plt.plot(benchmark_portfolio.index, benchmark_portfolio['Total Value'], 
-                    label=f'Benchmark ({args.benchmark}, After Tax)', linestyle='--')
+            # Benchmark is already after its own tax, but we add portfolio's tax as virtual capital
+            benchmark_adjusted = benchmark_portfolio['Total Value'] + portfolio['Tax Adjustment'].reindex(benchmark_portfolio.index, method='ffill').fillna(0)
+            plt.plot(benchmark_portfolio.index, benchmark_adjusted, 
+                    label=f'Benchmark ({args.benchmark}, After Tax + Portfolio Tax Capital)', linestyle='--')
             
         plt.title('Portfolio Performance Over Time (Tax-Adjusted)')
         plt.xlabel('Date')
