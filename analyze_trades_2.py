@@ -437,9 +437,13 @@ def calculate_benchmark_with_tax(transfers_df, benchmark_ticker, price_series, d
                         # Can't sell more than we have
                         shares_to_sell = min(shares_to_sell, qty)
                         
-                        # Calculate CGT on the sale
+                        # Calculate CGT on the sale using FIFO
+                        # Track which lots are being sold to properly apply discount
                         remaining = shares_to_sell
                         total_cost_base = 0.0
+                        total_gain = 0.0
+                        discounted_gain = 0.0
+                        non_discounted_gain = 0.0
                         
                         lots_copy = []
                         for lot in lots:
@@ -448,37 +452,62 @@ def calculate_benchmark_with_tax(transfers_df, benchmark_ticker, price_series, d
                                 continue
                             
                             if lot['quantity'] <= remaining:
-                                total_cost_base += lot['cost_base']
+                                # Sell entire lot
+                                sold_qty = lot['quantity']
+                                cost_base_sold = lot['cost_base']
+                                proceeds_sold = sold_qty * current_price
+                                lot_gain = proceeds_sold - cost_base_sold
+                                
+                                # Check if this lot qualifies for discount
+                                held_duration = div_date - lot['date']
+                                if lot_gain > 0 and held_duration > timedelta(days=365):
+                                    discounted_gain += lot_gain * 0.5
+                                elif lot_gain > 0:
+                                    non_discounted_gain += lot_gain
+                                else:
+                                    # Loss
+                                    non_discounted_gain += lot_gain
+                                
+                                total_cost_base += cost_base_sold
+                                total_gain += lot_gain
                                 remaining -= lot['quantity']
                             else:
-                                portion = remaining / lot['quantity']
-                                total_cost_base += lot['cost_base'] * portion
-                                lot['quantity'] -= remaining
-                                lot['cost_base'] -= lot['cost_base'] * portion
+                                # Sell partial lot
+                                sold_qty = remaining
+                                portion = sold_qty / lot['quantity']
+                                cost_base_sold = lot['cost_base'] * portion
+                                proceeds_sold = sold_qty * current_price
+                                lot_gain = proceeds_sold - cost_base_sold
+                                
+                                # Check if this lot qualifies for discount
+                                held_duration = div_date - lot['date']
+                                if lot_gain > 0 and held_duration > timedelta(days=365):
+                                    discounted_gain += lot_gain * 0.5
+                                elif lot_gain > 0:
+                                    non_discounted_gain += lot_gain
+                                else:
+                                    # Loss
+                                    non_discounted_gain += lot_gain
+                                
+                                total_cost_base += cost_base_sold
+                                total_gain += lot_gain
+                                
+                                # Update lot
+                                lot['quantity'] -= sold_qty
+                                lot['cost_base'] -= cost_base_sold
                                 lots_copy.append(lot)
                                 remaining = 0
                         
                         lots = lots_copy
                         
-                        sale_proceeds = shares_to_sell * current_price
-                        gain = sale_proceeds - total_cost_base
-                        
-                        # Apply CGT discount rules similar to portfolio calculation
-                        # For simplicity in benchmark, we'll assume FIFO and check first lot
-                        if gain > 0 and lots:
-                            held_duration = div_date - lots[0]['date']
-                            discount_eligible = held_duration > timedelta(days=365)
-                            
-                            if discount_eligible:
-                                taxable_gain = gain * 0.5
-                            else:
-                                taxable_gain = gain
-                            
-                            additional_tax = taxable_gain * tax_rate
+                        # Calculate additional tax from CGT on the sale
+                        taxable_gain_from_sale = discounted_gain + non_discounted_gain
+                        if taxable_gain_from_sale > 0:
+                            additional_tax = taxable_gain_from_sale * tax_rate
                             tax_owed += additional_tax
-                        elif gain < 0:
-                            # Loss reduces tax owed
-                            loss_benefit = abs(gain) * tax_rate
+                        elif taxable_gain_from_sale < 0:
+                            # Loss reduces tax owed (but not below zero)
+                            loss_benefit = abs(taxable_gain_from_sale) * tax_rate
                             tax_owed = max(0, tax_owed - loss_benefit)
                         
                         shares_held.loc[div_date:] -= shares_to_sell
@@ -582,8 +611,11 @@ def print_summary(portfolio, benchmark=None, benchmark_name=None, metrics=None, 
     
     if unrealized_gain is not None:
         print(f"{'Unrealized Gain':<30} | ${unrealized_gain:,.2f}")
-            
-    print("="*60 + "\n")
+    
+    print("="*60)
+    print("\nNote: Tax calculations assume capital losses offset gains at a 1:1")
+    print("ratio. In practice, unused losses carry forward indefinitely.")
+    print("This is a simplified model for comparison purposes.\n")
 
 def calculate_metrics(portfolio_df, transfers_df, rf_price_series, rf_dividend_series):
     metrics = {
@@ -633,7 +665,7 @@ def calculate_metrics(portfolio_df, transfers_df, rf_price_series, rf_dividend_s
 def main():
     parser = argparse.ArgumentParser(description='Analyze trading portfolio with tax adjustments.')
     parser.add_argument('--tax-rate', type=float, required=True, 
-                        help='Tax rate as a decimal (e.g., 0.37 for 37%%)')
+                        help='Tax rate as a decimal (e.g., 0.37 for 37%)')
     parser.add_argument('--benchmark', type=str, 
                         help='Ticker for benchmark ETF (e.g., GHHF.AX)')
     args = parser.parse_args()
